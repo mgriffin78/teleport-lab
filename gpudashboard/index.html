@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>gpu-pool-a monitor</title>
+<style>
+  :root {
+    --fog: #E4E9EE; --panel: #F5F7F9; --ink: #1A2732; --muted: #566674; --rule: #C1CBD4;
+    --hot: #D9962B; --fault: #B8361F; --ok: #2C7556;
+    font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    font-feature-settings: "tnum" 1;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fog); color: var(--ink); font-size: 15px; line-height: 1.45; }
+  header { max-width: 1400px; margin: 0 auto; padding: 28px 24px 8px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 24px; }
+  h1 { margin: 0; font-size: 34px; font-weight: 650; letter-spacing: -0.02em; }
+  .status { color: var(--muted); display: flex; gap: 20px; flex-wrap: wrap; }
+  .status strong { color: var(--ink); font-weight: 600; }
+  main { max-width: 1400px; margin: 0 auto; padding: 16px 24px 32px; display: grid; gap: 24px;
+         grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr); }
+  section { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 20px; }
+  h2 { margin: 0 0 14px; font-size: 17px; font-weight: 600; }
+  .sub { color: var(--muted); font-size: 13px; margin: -10px 0 14px; }
+
+  /* Utilization heatmap: the page's centerpiece */
+  #heat { display: grid; grid-template-columns: 104px repeat(8, minmax(30px, 1fr)); gap: 3px; }
+  #heat .colhead { font-size: 12px; color: var(--muted); text-align: center; padding-bottom: 2px; }
+  #heat .rowhead { font-size: 13px; align-self: center; white-space: nowrap; }
+  #heat .rowhead.drain { color: var(--muted); text-decoration: line-through; }
+  .cell { height: 40px; border: 2px solid transparent; border-radius: 3px; font: inherit; font-size: 13px;
+          cursor: pointer; transition: background-color .6s linear; }
+  .cell.hot { border-color: var(--hot); }
+  .cell.fault { background: var(--fault) !important; color: #fff !important; }
+  .cell[aria-pressed="true"] { outline: 2px solid var(--ink); outline-offset: 1px; }
+  .cell:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+  .legend { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 14px; font-size: 13px; color: var(--muted); }
+  .ramp { width: 140px; height: 10px; border-radius: 2px; background: linear-gradient(90deg, rgb(211,224,234), rgb(22,72,112)); }
+  .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 2px; vertical-align: -1px; margin-right: 4px; }
+
+  aside { display: grid; gap: 24px; align-content: start; }
+  .trend + .trend { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--rule); }
+  .trend .label { font-size: 13px; color: var(--muted); }
+  .trend .value { font-size: 28px; font-weight: 600; letter-spacing: -0.01em; }
+  .trend .value small { font-size: 14px; font-weight: 400; color: var(--muted); margin-left: 4px; }
+  .trend svg { display: block; width: 100%; height: 44px; margin-top: 4px; }
+  .trend polyline { fill: none; stroke: var(--ink); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+
+  dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; }
+  dt { color: var(--muted); } dd { margin: 0; text-align: right; }
+
+  .wide { grid-column: 1 / -1; }
+  .scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; min-width: 640px; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--rule); }
+  th { font-size: 13px; font-weight: 600; color: var(--muted); }
+  td.num, th.num { text-align: right; }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 13px; }
+  .pill.ok { background: #D5E8DE; color: var(--ok); }
+  .pill.drain { background: #DDE2E6; color: var(--muted); }
+  .pill.fault { background: #F2D5CF; color: var(--fault); }
+  footer { max-width: 1400px; margin: 0 auto; padding: 0 24px 32px; color: var(--muted); font-size: 13px; }
+
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } h1 { font-size: 28px; } }
+  @media (prefers-reduced-motion: reduce) { .cell { transition: none; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>gpu-pool-a</h1>
+  <div class="status" aria-live="polite">
+    <span><strong id="busy">0</strong> of 64 GPUs busy</span>
+    <span><strong id="faults">0</strong> GPU faults</span>
+    <span>Updated <strong id="updated">--:--:--</strong></span>
+  </div>
+</header>
+
+<main>
+  <section>
+    <h2>Utilization by GPU</h2>
+    <p class="sub">Select a GPU to see its details.</p>
+    <div id="heat" role="group" aria-label="GPU utilization heatmap"></div>
+    <div class="legend">
+      <span>0%</span><span class="ramp" aria-hidden="true"></span><span>100%</span>
+      <span><span class="swatch" style="border:2px solid var(--hot)"></span>Above 82 °C</span>
+      <span><span class="swatch" style="background:var(--fault)"></span>Fault (Xid)</span>
+    </div>
+  </section>
+
+  <aside>
+    <section>
+      <div class="trend"><div class="label">Mean GPU utilization</div>
+        <div class="value" id="v-util">0<small>%</small></div><svg viewBox="0 0 120 40" preserveAspectRatio="none" aria-hidden="true"><polyline id="s-util"/></svg></div>
+      <div class="trend"><div class="label">Power draw</div>
+        <div class="value" id="v-power">0<small>kW</small></div><svg viewBox="0 0 120 40" preserveAspectRatio="none" aria-hidden="true"><polyline id="s-power"/></svg></div>
+      <div class="trend"><div class="label">Fabric throughput</div>
+        <div class="value" id="v-fabric">0<small>GB/s</small></div><svg viewBox="0 0 120 40" preserveAspectRatio="none" aria-hidden="true"><polyline id="s-fabric"/></svg></div>
+    </section>
+    <section>
+      <h2 id="d-title">GPU</h2>
+      <dl>
+        <dt>Job</dt><dd id="d-job"></dd>
+        <dt>Utilization</dt><dd id="d-util"></dd>
+        <dt>Temperature</dt><dd id="d-temp"></dd>
+        <dt>Memory used</dt><dd id="d-mem"></dd>
+        <dt>Power</dt><dd id="d-power"></dd>
+        <dt>State</dt><dd id="d-state"></dd>
+      </dl>
+    </section>
+  </aside>
+
+  <section class="wide">
+    <h2>Nodes</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Node</th><th>Status</th><th>Job</th><th class="num">Mean util</th><th class="num">Hottest GPU</th><th class="num">Power</th></tr></thead>
+        <tbody id="nodes"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+<footer>Demo data generated in the browser. Refreshes every 2 seconds.</footer>
+
+<script>
+(() => {
+  const N = 8, G = 8, HIST = 60, MEM_TOTAL = 180;
+  const $ = id => document.getElementById(id);
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+  const JOBS = [
+    { name: 'moe-pretrain', base: 94 }, { name: 'llama-finetune', base: 80 },
+    { name: 'diffusion-sweep', base: 66 }, { name: 'rag-embed', base: 38 }, { name: 'idle', base: 1 }
+  ];
+  const plan = [0, 0, 0, 1, 1, 2, 3, 4];
+  const nodes = plan.map((j, i) => ({
+    name: `gpu-node-${String(i + 1).padStart(2, '0')}`,
+    job: JOBS[j], draining: i === 7,
+    gpus: Array.from({ length: G }, () => ({ util: JOBS[j].base, temp: 40, mem: 0, power: 0, fault: 0 }))
+  }));
+  const hist = { util: [], power: [], fabric: [] };
+  let sel = { n: 0, g: 0 };
+
+  function step() {
+    for (const node of nodes) for (const g of node.gpus) {
+      const base = node.job.base;
+      g.util = clamp(g.util + (base - g.util) * 0.25 + rnd(-6, 6), 0, 100);
+      if (base < 5) g.util = rnd(0, 3);
+      if (g.fault > 0) { g.fault--; g.util = 0; }
+      else if (base > 50 && Math.random() < 0.0015) g.fault = 8;
+      g.temp = clamp(34 + g.util * 0.5 + rnd(-2, 3), 30, 95);
+      g.power = Math.round(140 + g.util * 8.4 + rnd(-15, 15));
+      g.mem = base > 5 && !g.fault ? clamp(base * 1.75 + rnd(-4, 4), 2, MEM_TOTAL) : rnd(0.5, 1.5);
+    }
+    const all = nodes.flatMap(n => n.gpus);
+    const push = (k, v) => { hist[k].push(v); if (hist[k].length > HIST) hist[k].shift(); };
+    push('util', all.reduce((s, g) => s + g.util, 0) / all.length);
+    push('power', all.reduce((s, g) => s + g.power, 0) / 1000);
+    push('fabric', nodes.reduce((s, n) => s + (n.job.base > 5 ? mean(n) / 100 * 360 : 0), 0) + rnd(-20, 20));
+  }
+  const mean = n => n.gpus.reduce((s, g) => s + g.util, 0) / G;
+
+  // Build heatmap once, then only restyle cells.
+  const heat = $('heat'), cells = [];
+  heat.append(Object.assign(document.createElement('div'), { className: 'colhead' }));
+  for (let g = 0; g < G; g++) heat.append(Object.assign(document.createElement('div'), { className: 'colhead', textContent: `GPU ${g}` }));
+  nodes.forEach((node, n) => {
+    heat.append(Object.assign(document.createElement('div'), { className: 'rowhead' + (node.draining ? ' drain' : ''), textContent: node.name }));
+    cells[n] = [];
+    for (let g = 0; g < G; g++) {
+      const b = document.createElement('button');
+      b.className = 'cell';
+      b.addEventListener('click', () => { sel = { n, g }; render(); });
+      heat.append(b); cells[n][g] = b;
+    }
+  });
+
+  const shade = u => {
+    const t = u / 100, a = [211, 224, 234], z = [22, 72, 112];
+    return `rgb(${a.map((v, i) => Math.round(v + (z[i] - v) * t)).join(',')})`;
+  };
+  const spark = (id, data, max) => {
+    $(id).setAttribute('points', data.map((v, i) =>
+      `${((HIST - data.length + i) / (HIST - 1) * 120).toFixed(1)},${(39 - clamp(v / max, 0, 1) * 37).toFixed(1)}`).join(' '));
+  };
+  const last = a => a[a.length - 1];
+
+  function render() {
+    let busy = 0, faults = 0;
+    nodes.forEach((node, n) => node.gpus.forEach((g, i) => {
+      const c = cells[n][i];
+      if (g.util > 20) busy++;
+      if (g.fault) faults++;
+      c.style.backgroundColor = shade(g.util);
+      c.style.color = g.util > 55 ? '#fff' : 'var(--ink)';
+      c.classList.toggle('hot', g.temp > 82 && !g.fault);
+      c.classList.toggle('fault', !!g.fault);
+      c.textContent = g.fault ? 'Xid' : Math.round(g.util);
+      c.setAttribute('aria-pressed', sel.n === n && sel.g === i);
+      c.setAttribute('aria-label', `${node.name} GPU ${i}: ${Math.round(g.util)}% utilization, ${Math.round(g.temp)} °C${g.fault ? ', fault' : ''}`);
+    }));
+    $('busy').textContent = busy;
+    $('faults').textContent = faults;
+    $('updated').textContent = new Date().toLocaleTimeString([], { hour12: false });
+
+    $('v-util').firstChild.nodeValue = Math.round(last(hist.util));
+    $('v-power').firstChild.nodeValue = last(hist.power).toFixed(1);
+    $('v-fabric').firstChild.nodeValue = Math.round(last(hist.fabric)).toLocaleString();
+    spark('s-util', hist.util, 100); spark('s-power', hist.power, 70); spark('s-fabric', hist.fabric, 2400);
+
+    const node = nodes[sel.n], g = node.gpus[sel.g];
+    $('d-title').textContent = `${node.name} GPU ${sel.g}`;
+    $('d-job').textContent = node.job.name;
+    $('d-util').textContent = `${Math.round(g.util)}%`;
+    $('d-temp').textContent = `${Math.round(g.temp)} °C`;
+    $('d-mem').textContent = `${g.mem.toFixed(1)} of ${MEM_TOTAL} GB`;
+    $('d-power').textContent = `${g.power} W`;
+    $('d-state').textContent = g.fault ? 'Fault: Xid 79, GPU fell off the bus' : node.draining ? 'Draining' : 'Healthy';
+
+    $('nodes').innerHTML = nodes.map(node => {
+      const f = node.gpus.some(g => g.fault);
+      const status = f ? '<span class="pill fault">GPU fault</span>' : node.draining ? '<span class="pill drain">Draining</span>' : '<span class="pill ok">Healthy</span>';
+      const hottest = Math.max(...node.gpus.map(g => g.temp));
+      const kw = node.gpus.reduce((s, g) => s + g.power, 0) / 1000;
+      return `<tr><td>${node.name}</td><td>${status}</td><td>${node.job.name}</td>
+        <td class="num">${Math.round(mean(node))}%</td><td class="num">${Math.round(hottest)} °C</td><td class="num">${kw.toFixed(1)} kW</td></tr>`;
+    }).join('');
+  }
+
+  for (let i = 0; i < HIST; i++) step();
+  render();
+  setInterval(() => { step(); render(); }, 2000);
+})();
+</script>
+</body>
+</html>

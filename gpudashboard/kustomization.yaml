@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: gpu-dashboard
+resources:
+- namespace.yaml
+- deployment.yaml
+- service.yaml
+- pdb.yaml
+# Hash-suffixed ConfigMaps: editing index.html or nginx.conf triggers a rolling restart.
+configMapGenerator:
+- name: dashboard-html
+  files:
+  - index.html
+- name: dashboard-nginx
+  files:
+  - default.conf=nginx.conf
