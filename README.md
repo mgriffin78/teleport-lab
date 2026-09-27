@@ -20,7 +20,7 @@ swapoff -a
 systemctl stop ufw
 systemctl disable ufw
 
-# following commands can be found at kubernetes.io
+# Pull keyring and update kubernetes repo
 curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.37/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
 echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.37/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
 
