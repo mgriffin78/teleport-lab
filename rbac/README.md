@@ -1,5 +1,6 @@
 ## Setup GPU Dashboard reader ##
-# Run the following commands to generate and sign certificate use to authenticate against the kubernetes API
+Run the following commands to generate and sign certificate use to authenticate against the kubernetes API
+
 ```bash
 #Create and sign certificate
 openssl genrsa -out .certs/kubernetes/gpudash.key 2048
