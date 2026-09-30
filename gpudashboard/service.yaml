@@ -5,15 +5,12 @@ metadata:
   labels:
     app.kubernetes.io/name: gpu-dashboard
 spec:
-  type: LoadBalancer            # bare metal: needs MetalLB/kube-vip; otherwise use NodePort below
-  # loadBalancerIP is deprecated; with MetalLB pin an address via:
-  #   metadata.annotations: metallb.universe.tf/loadBalancerIPs: 10.0.0.50
-  # type: NodePort
+  type: NodePort
   selector:
     app.kubernetes.io/name: gpu-dashboard
   ports:
-  - name: http
-    port: 80
-    targetPort: http
+  - name: https
+    port: 443
+    targetPort: https
     protocol: TCP
-    # nodePort: 30080           # only with type: NodePort
+    # nodePort: 30443
