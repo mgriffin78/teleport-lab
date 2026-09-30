@@ -1,0 +1,13 @@
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: dashboard-reader
+  namespace: gpu-dashboard
+subjects:
+- kind: User
+  name: mike
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: dashboard-view
+  apiGroup: rbac.authorization.k8s.io
