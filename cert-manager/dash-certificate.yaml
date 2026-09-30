@@ -1,0 +1,19 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: gpu-certificate
+  namespace: gpu-dashboard
+spec:
+  secretName: dashboard-secret
+  duration: 200h
+  renewBefore: 100h
+  commonName: "gpu-dash.com"
+  usages:
+    - server auth
+  subject:
+    organizations:
+      - dashboard-view
+
+  issuerRef:
+    name: gpu-issuer
+    kind: Issuer
