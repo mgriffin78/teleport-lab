@@ -48,6 +48,11 @@ systemctl status kubelet
 
 # Deploy Kubernetes cluster
 kubeadm init --pod-network-cidr 10.244.0.0/16
+
+# Download and deploy Canal
+curl https://raw.githubusercontent.com/projectcalico/calico/v3.32.2/manifests/canal.yaml -O
+kubectl apply -f canal.yaml
+
 ```
 
 
