@@ -1,4 +1,4 @@
-## Install Cert manager ##
+## Install Cert Manager ##
 ```bash
 helm install \
   cert-manager oci://quay.io/jetstack/charts/cert-manager \
